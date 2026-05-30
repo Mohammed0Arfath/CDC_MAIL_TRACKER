@@ -1,0 +1,6 @@
+{
+  "name": "VIT Placement Assistant",
+  "description": "Personal placement assistant that monitors CDC emails, flags shortlists for Mohammed, and generates study plans.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
