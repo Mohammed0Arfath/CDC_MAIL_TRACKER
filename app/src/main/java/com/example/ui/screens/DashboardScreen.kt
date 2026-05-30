@@ -18,6 +18,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.platform.testTag
 import com.example.data.AlertType
 import com.example.data.EmailAlert
 
@@ -74,13 +75,14 @@ fun DashboardScreen(
 
 @Composable
 fun AlertCard(alert: EmailAlert, onClick: () -> Unit) {
-    Card(
+    OutlinedCard(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick),
-        colors = CardDefaults.cardColors(
-            containerColor = getCardColorForType(alert.type)
-        )
+        colors = CardDefaults.outlinedCardColors(
+            containerColor = MaterialTheme.colorScheme.surface
+        ),
+        border = androidx.compose.foundation.BorderStroke(1.dp, getCardColorForType(alert.type))
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -91,11 +93,11 @@ fun AlertCard(alert: EmailAlert, onClick: () -> Unit) {
                     modifier = Modifier.size(24.dp)
                 )
                 Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = alert.type.name,
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.primary
-                )
+                    Text(
+                        text = alert.type.name,
+                        style = MaterialTheme.typography.labelMedium.copy(letterSpacing = androidx.compose.ui.unit.TextUnit(2f, androidx.compose.ui.unit.TextUnitType.Sp)),
+                        color = getCardColorForType(alert.type)
+                    )
                 Spacer(modifier = Modifier.weight(1f))
             }
             Spacer(modifier = Modifier.height(8.dp))
@@ -129,9 +131,9 @@ fun getIconForType(type: AlertType) = when(type) {
 
 @Composable
 fun getCardColorForType(type: AlertType) = when(type) {
-    AlertType.REGISTRATION -> MaterialTheme.colorScheme.secondaryContainer
-    AlertType.SHORTLIST -> MaterialTheme.colorScheme.tertiaryContainer
-    AlertType.EVENT -> MaterialTheme.colorScheme.primaryContainer
-    AlertType.UNKNOWN -> MaterialTheme.colorScheme.surfaceVariant
+    AlertType.REGISTRATION -> MaterialTheme.colorScheme.secondary
+    AlertType.SHORTLIST -> MaterialTheme.colorScheme.tertiary
+    AlertType.EVENT -> MaterialTheme.colorScheme.primary
+    AlertType.UNKNOWN -> MaterialTheme.colorScheme.outline
 }
 

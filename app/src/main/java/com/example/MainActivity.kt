@@ -19,6 +19,9 @@ import androidx.navigation.toRoute
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import android.widget.Toast
+import android.Manifest
+import android.os.Build
+import androidx.compose.runtime.LaunchedEffect
 import com.example.data.AppDatabase
 import com.example.data.PlacementRepository
 import com.example.ui.PlacementViewModel
@@ -60,6 +63,18 @@ fun PlacementApp(viewModel: PlacementViewModel) {
     val navController = rememberNavController()
     val allAlerts by viewModel.allAlerts.collectAsState()
     val context = LocalContext.current
+
+    val permissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        // Handle permission
+    }
+
+    LaunchedEffect(Unit) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
+    }
 
     val signInLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartActivityForResult()

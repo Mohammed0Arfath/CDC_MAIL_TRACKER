@@ -71,7 +71,7 @@ class PlacementViewModel(
     fun startBackgroundSync(context: Context) {
         val syncWorkRequest = PeriodicWorkRequestBuilder<GmailFetchWorker>(15, TimeUnit.MINUTES)
             .build()
-        WorkManager.getInstance(context).enqueueUniquePeriodicWork(
+        WorkManager.getInstance(context.applicationContext).enqueueUniquePeriodicWork(
             "GmailSyncWorker",
             ExistingPeriodicWorkPolicy.KEEP,
             syncWorkRequest

@@ -6,6 +6,12 @@ import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import com.example.data.AppDatabase
 import com.example.data.EmailAlert
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
+import android.content.Intent
+import android.os.Build
+import androidx.core.app.NotificationCompat
 import com.google.android.gms.auth.api.signin.GoogleSignIn
 import com.google.api.client.googleapis.extensions.android.gms.auth.GoogleAccountCredential
 import com.google.api.client.http.javanet.NetHttpTransport
@@ -68,7 +74,8 @@ class GmailFetchWorker(
                     if (bodyText.isNotBlank()) {
                         val alert = emailAnalyzer.analyzeEmail(bodyText)
                         if (alert != null) {
-                            dao.insertAlert(alert)
+                            val id = dao.insertAlert(alert)
+                            showNotification(context, alert.copy(id = id.toInt()))
                         }
                     }
                 }
@@ -77,6 +84,42 @@ class GmailFetchWorker(
         } catch (e: Exception) {
             Log.e("GmailFetchWorker", "Error fetching emails", e)
             Result.retry()
+        }
+    }
+
+    private fun showNotification(context: Context, alert: EmailAlert) {
+        val channelId = "placement_alerts"
+        val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = NotificationChannel(
+                channelId,
+                "Placement Alerts",
+                NotificationManager.IMPORTANCE_HIGH
+            )
+            notificationManager.createNotificationChannel(channel)
+        }
+
+        val intent = Intent(context, com.example.MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+        }
+        val pendingIntent = PendingIntent.getActivity(
+            context, 0, intent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        )
+
+        val notification = NotificationCompat.Builder(context, channelId)
+            .setSmallIcon(android.R.drawable.ic_dialog_info)
+            .setContentTitle("New Alert: ${alert.companyName}")
+            .setContentText("${alert.type.name} - ${if (alert.isEligible) "Eligible" else "Not Eligible"}")
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setContentIntent(pendingIntent)
+            .setAutoCancel(true)
+            .build()
+
+        try {
+            notificationManager.notify(alert.id, notification)
+        } catch (e: SecurityException) {
+            // Permission denied
         }
     }
 
