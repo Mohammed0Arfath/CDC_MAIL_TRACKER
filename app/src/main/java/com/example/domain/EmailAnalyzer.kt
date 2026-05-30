@@ -11,7 +11,9 @@ class EmailAnalyzer {
 
     suspend fun analyzeEmail(rawEmailText: String): EmailAlert? = withContext(Dispatchers.IO) {
         val apiKey = BuildConfig.GEMINI_API_KEY
-        if (apiKey.isEmpty() || apiKey == "MY_GEMINI_API_KEY") return@withContext null
+        if (apiKey.isEmpty() || apiKey == "MY_GEMINI_API_KEY") {
+            return@withContext analyzeEmailOffline(rawEmailText)
+        }
 
         val prompt = rawEmailText
         
@@ -60,7 +62,7 @@ class EmailAnalyzer {
 
         try {
             val response = GeminiClient.service.generateContent(apiKey, requestBody)
-            val jsonText = response.candidates.firstOrNull()?.content?.parts?.firstOrNull()?.text ?: return@withContext null
+            val jsonText = response.candidates.firstOrNull()?.content?.parts?.firstOrNull()?.text ?: return@withContext analyzeEmailOffline(rawEmailText)
             
             // Format output JSON directly to EmailAlert data class via kotlinx serialization
             val jsonDecoder = Json { ignoreUnknownKeys = true }
@@ -83,8 +85,116 @@ class EmailAnalyzer {
             )
         } catch (e: Exception) {
             e.printStackTrace()
-            null
+            return@withContext analyzeEmailOffline(rawEmailText)
         }
+    }
+
+    private fun analyzeEmailOffline(rawEmailText: String): EmailAlert {
+        val lowerText = rawEmailText.lowercase()
+
+        // 1. Determine Type
+        val type = when {
+            lowerText.contains("shortlist") || lowerText.contains("test link") || lowerText.contains("selected candidates") || lowerText.contains("selection list") || lowerText.contains("next round") || lowerText.contains("interview schedule") -> AlertType.SHORTLIST
+            lowerText.contains("registration") || lowerText.contains("register here") || lowerText.contains("deadline") || lowerText.contains("super dream") || lowerText.contains("dream category") -> AlertType.REGISTRATION
+            lowerText.contains("tech talk") || lowerText.contains("webinar") || lowerText.contains("pre placement talk") || lowerText.contains("ppt") || lowerText.contains("guest lecture") -> AlertType.EVENT
+            else -> AlertType.UNKNOWN
+        }
+
+        // 2. Extract Company Name (look for "Dear Students", "Registration for", etc. or capitalise words)
+        var companyName = "Unknown Company"
+        val registrationRegex = Regex("(?i)registration\\s+for\\s+([A-Za-z0-9\\s]{3,30})")
+        val recruitRegex = Regex("(?i)hiring\\s+([A-Za-z0-9\\s]{3,30})")
+        val shortlistRegex = Regex("(?i)([A-Za-z0-9\\s]{3,30})\\s+shortlist")
+        
+        val regMatch = registrationRegex.find(rawEmailText)
+        val recMatch = recruitRegex.find(rawEmailText)
+        val shortMatch = shortlistRegex.find(rawEmailText)
+
+        if (regMatch != null) {
+            companyName = regMatch.groupValues[1].trim()
+        } else if (recMatch != null) {
+            companyName = recMatch.groupValues[1].trim()
+        } else if (shortMatch != null) {
+            companyName = shortMatch.groupValues[1].trim()
+        } else {
+            // Find first line or subject
+            val lines = rawEmailText.split("\n")
+            for (line in lines) {
+                if (line.isNotBlank() && line.length < 50) {
+                    companyName = line.trim()
+                    break
+                }
+            }
+        }
+
+        // 3. Category
+        val category = when {
+            lowerText.contains("super dream") -> "Super Dream"
+            lowerText.contains("dream") -> "Dream"
+            lowerText.contains("regular") -> "Regular"
+            else -> ""
+        }
+
+        // 4. Status (for shortlists)
+        var status = ""
+        var batchmatesString = ""
+        if (type == AlertType.SHORTLIST) {
+            val arfathFound = lowerText.contains("arfath") || lowerText.contains("22mis0479") || lowerText.contains("m5x3v7y6")
+            status = if (arfathFound) "YOU ARE IN THE LIST" else "Your name was not found"
+
+            // Look for other 22MIS0XXX batchmates
+            val batchmateRegex = Regex("22MIS0\\d{3}", RegexOption.IGNORE_CASE)
+            val matches = batchmateRegex.findAll(rawEmailText).map { it.value.uppercase() }.distinct().toList()
+            batchmatesString = matches.joinToString(", ")
+        }
+
+        // 5. Eligibility (default to true if it mentions computer science, IT, integrated M.tech, software engineering)
+        val isEligible = lowerText.contains("integrated m.tech") || 
+                lowerText.contains("integrated mtech") || 
+                lowerText.contains("software engineering") || 
+                lowerText.contains("m.tech 5-year") ||
+                lowerText.contains("m.tech (se)") ||
+                lowerText.contains("5 year") ||
+                !lowerText.contains("eligibility") // if no eligibility block, default to true
+
+        // 6. Extract fields like stipends or link
+        var stipend = ""
+        if (lowerText.contains("stipend")) {
+            val stipendRegex = Regex("(?i)stipend[:\\s]+([A-Za-z0-9,\\s/]+)")
+            stipend = stipendRegex.find(rawEmailText)?.groupValues?.get(1)?.trim() ?: ""
+        }
+
+        var ctc = ""
+        if (lowerText.contains("ctc")) {
+            val ctcRegex = Regex("(?i)ctc[:\\s]+([A-Za-z0-9,\\s.LPA/]+)")
+            ctc = ctcRegex.find(rawEmailText)?.groupValues?.get(1)?.trim() ?: ""
+        }
+
+        var link = ""
+        val linkRegex = Regex("(?i)(https?://[\\w\\-\\.]+\\.[a-zA-Z]{2,5}(?:/[\\w\\-%&?\\=]*)?)")
+        link = linkRegex.find(rawEmailText)?.value ?: ""
+
+        var deadline = ""
+        if (lowerText.contains("deadline") || lowerText.contains("last date")) {
+            val deadlineRegex = Regex("(?i)deadline[:\\s]+([A-Za-z0-9\\s,\\-:]+)")
+            deadline = deadlineRegex.find(rawEmailText)?.groupValues?.get(1)?.trim() ?: ""
+        }
+
+        return EmailAlert(
+            type = type,
+            companyName = companyName,
+            category = category,
+            status = status,
+            stipend = stipend,
+            ctc = ctc,
+            location = "",
+            deadline = deadline,
+            link = link,
+            eventDateTime = "",
+            isEligible = isEligible,
+            rawEmailBody = rawEmailText,
+            batchmates = batchmatesString
+        )
     }
 }
 
